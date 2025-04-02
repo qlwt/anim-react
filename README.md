@@ -10,7 +10,7 @@ React hooks for @qyu/anim-core to create and run declarative animations
 
 ## Animate Styles with springs
 
-```typescriptreact
+```tsx
 // create scheduler for browser, for native or node, use (Date, setTimeout, clearTimeout)
 const scheduler_raf = fscheduler_new_frame(performance, requestAnimationFrame, cancelAnimationFrame)
 
@@ -94,7 +94,7 @@ const App = () => {
 
 Animation will continuosly update on path conditions change (for linear animation it's config), but restart on initial conditions change. This works for all types of animations
 
-```typescriptreact
+```tsx
 const scheduler_raf = fscheduler_new_frame(performance, requestAnimationFrame, cancelAnimationFrame)
 
 const App = () => {
@@ -137,7 +137,7 @@ const App = () => {
 
 Animations take special kind of input created with useInput hooks
 
-```typescriptreact
+```tsx
 // will never update no matter what
 useInputConstant(10)
 // will update when dependencies change
@@ -155,7 +155,7 @@ useInputDynamicSet(10, [deps])
 useAnim* hook creates whole animation, but useInit* and usePath* hooks can be used to only create point or path definition
 Almost all of animation variants have both useAnim, usePath and useInit variants
 
-```typescriptreact
+```tsx
 // does not request whole anim definition in links, see later
 useAnimChain([
     useAnimLine({
@@ -191,7 +191,7 @@ useAnimChain([
 
 Linear animation
 
-```typescriptreact
+```tsx
 const App = () => {
     const [target, target_set] = useState(100)
 
@@ -224,7 +224,7 @@ const App = () => {
 
 Spring-like animation
 
-```typescriptreact
+```tsx
 const App = () => {
     const [target, target_set] = useState(100)
 
@@ -267,7 +267,7 @@ const App = () => {
 
 Speed up or slow down animation
 
-```typescriptreact
+```tsx
 const App = () => {
     const [target, target_set] = useState(100)
 
@@ -308,7 +308,7 @@ const App = () => {
 
 Emit animations in sequence, if animation completed once, when target updated it will emit in parallel
 
-```typescriptreact
+```tsx
 const App = () => {
     const [target, target_set] = useState(100)
 
@@ -358,7 +358,7 @@ const App = () => {
 
 Init animations in sequence, but only emit one at a time event if it has finished before
 
-```typescriptreact
+```tsx
 const App = () => {
     const [target, target_set] = useState(100)
 
@@ -408,7 +408,7 @@ const App = () => {
 
 Init animations in parallel
 
-```typescriptreact
+```tsx
 const App = () => {
     const [target, target_set] = useState(100)
 
@@ -458,7 +458,7 @@ const App = () => {
 
 Emit animations in sequence, but with shared point
 
-```typescriptreact
+```tsx
 const App = () => {
     const [target, target_set] = useState(100)
 
@@ -504,7 +504,7 @@ const App = () => {
 
 Like chain but with threads
 
-```typescriptreact
+```tsx
 const App = () => {
     const [target, target_set] = useState(100)
 
@@ -575,7 +575,7 @@ const App = () => {
 
 Repeat an animation
 
-```typescriptreact
+```tsx
 const App = () => {
     const [target, target_set] = useState(100)
 
@@ -613,7 +613,7 @@ const App = () => {
 
 ### Merge Init and Path together
 
-```typescriptreact
+```tsx
     const App = () => {
         const [target, target_set] = useState(100)
 
@@ -646,7 +646,7 @@ const App = () => {
 
 Adapt animation for different kind of point
 
-```typescriptreact
+```tsx
 const App = () => {
     const [target, target_set] = useState(100)
 
@@ -703,7 +703,7 @@ const App = () => {
 
 Makes animation monolith, when one updates initial conditions - restarts the whole thing
 
-```typescriptreact
+```tsx
 const App = () => {
     const [target, target_set] = useState(100)
 
@@ -753,7 +753,7 @@ const App = () => {
 
 Animate ref's styles with springs
 
-```typescriptreact
+```tsx
 const App = () => {
     const [natfreq, natfreq_set] = useState(1e-2)
     const [width_target, width_target_set] = useState(500)
@@ -824,7 +824,7 @@ const App = () => {
 
 Animate styles of target with line
 
-```typescriptreact
+```tsx
 const App = () => {
     const [velocity, velocity_set] = useState(1e-2)
     const [width_target, width_target_set] = useState(500)
