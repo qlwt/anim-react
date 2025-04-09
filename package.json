@@ -1,7 +1,8 @@
 {
     "name": "@qyu/anim-react",
     "type": "module",
-    "version": "1.0.0",
+    "version": "1.0.1",
+    "main": "./build/bundle/entry/index.js",
     "description": "Declarative animations for react",
     "homepage": "https://github.com/qlwt/anim-react#readme",
     "keywords": ["animation", "loop", "sequence", "spring", "oscilator", "react", "hooks"],
