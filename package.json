@@ -1,7 +1,7 @@
 {
     "name": "@qyu/anim-react",
     "type": "module",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "main": "./build/bundle/entry/index.js",
     "description": "Declarative animations for react",
     "homepage": "https://github.com/qlwt/anim-react#readme",
@@ -37,8 +37,8 @@
     "dependencies": {
         "tslib": "^2.6.3",
         "@qyu/anim-core": "^1.0.1",
-        "@qyu/signal-core": "^1.0.0",
-        "@qyu/signal-react": "^1.0.0"
+        "@qyu/signal-core": "^1.1.1",
+        "@qyu/signal-react": "^1.2.1"
     },
     "peerDependencies": {
         "react": ">=18.0.0"
