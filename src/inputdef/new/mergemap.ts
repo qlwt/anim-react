@@ -32,13 +32,7 @@ export const inputdef_new_mergemap = function <Src extends SrcGeneric>(src: Src)
     const esignal = sc.esignal_new_merge(src_signals)
 
     return inputdef_new_dynamic({
-        rmsub(sub) {
-            esignal.rmsub(sub)
-        },
-
-        addsub(sub, config) {
-            esignal.addsub(sub, config)
-        },
+        ...esignal,
 
         output() {
             const output = {} as Src_Output<Src>

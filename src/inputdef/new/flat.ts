@@ -1,7 +1,8 @@
 import { inputdef_new_dynamic } from "#src/inputdef/new/dynamic.js"
 import { inputdef_new_static } from "#src/inputdef/new/static.js"
 import { InputDef_type, type InputDef } from "#src/inputdef/type/InputDef.js"
-import { attachment_new_lazy, type OSignal } from "@qyu/signal-core"
+import type { InputDef_InferOutput } from "#src/inputdef/type/InputDef_InferOutput.js"
+import { attachment_new_lazy, batcher, signal_sub_emit, type Signal_Sub } from "@qyu/signal-core"
 
 type Src_Generic = InputDef<InputDef | undefined>
 
@@ -15,88 +16,134 @@ type InputDefFlat_Output<Src extends Src_Generic> = (
     )
 )
 
+type Cache<Src extends Src_Generic> = {
+    src_id: Symbol
+    batcher_id: Symbol
+    target: InputDef_InferOutput<Src>
+}
+
 export const inputdef_new_flat = function <Src extends Src_Generic>(src: Src): InputDef<InputDefFlat_Output<Src>> {
     if (src.type === InputDef_type.Static) {
         const src_value = src.value()
 
         return src_value || inputdef_new_static(() => undefined)
-
     }
 
-    let target: OSignal | null = null
+    let cache: Cache<Src> | null = null
 
-    const src_sub = () => {
-        const src_output = src.value.output()
+    const cache_get = () => {
+        const batcher_id = batcher.id()
 
-        target?.rmsub(target_sub)
+        if (cache) {
+            if (batcher_id !== cache.batcher_id) {
+                const src_id = src.value.id()
+                const src_output = src.value.output() as InputDef_InferOutput<Src>
 
-        switch (src_output?.type) {
-            case undefined:
-            case InputDef_type.Static: {
-                target = null
-
-                break
+                if (cache.src_id !== src_id) {
+                    cache = {
+                        src_id,
+                        batcher_id,
+                        target: src_output,
+                    }
+                }
             }
-            case InputDef_type.Dynamic: {
-                const newtarget = src_output.value
+        } else {
+            const src_id = src.value.id()
+            const src_output = src.value.output() as InputDef_InferOutput<Src>
 
-                target = newtarget
-
-                newtarget.addsub(target_sub, { instant: true })
-
-                break
+            cache = {
+                src_id,
+                batcher_id,
+                target: src_output,
             }
         }
 
-        target_sub()
+        return cache
     }
 
-    const target_sub = () => {
-        attachment.emit()
-    }
+    const attachment = attachment_new_lazy({
+        connection_new: order => {
+            let target_last: InputDef_InferOutput<Src> | null = null
 
-    const attachment = attachment_new_lazy(
-        () => {
-            src.value.addsub(src_sub, { instant: true })
+            const emit = () => {
+                attachment.emit(order)
+            }
 
-            const src_output = src.value.output()
+            const src_sub: Signal_Sub = () => {
+                const cache_l = cache_get()
+                const cache_now = cache_l.target
 
-            if (src_output?.type === InputDef_type.Dynamic) {
-                target = src_output.value
+                const last = target_last
 
-                src_output.value.addsub(target_sub, { instant: true })
+                {
+                    target_last = cache_now
+                }
+
+                if (last && last.type === InputDef_type.Dynamic) {
+                    last.value.rmsub(emit)
+                }
+
+                if (cache_now && cache_now.type === InputDef_type.Dynamic) {
+                    cache_now.value.addsub(emit, { order })
+                }
+
+                signal_sub_emit(emit, { order: false })
+            }
+
+            return {
+                attach: () => {
+                    const cache_l = cache_get()
+                    const cache_now = cache_l.target
+
+                    {
+                        target_last = cache_now
+                    }
+
+                    src.value.addsub(src_sub, { order })
+
+                    if (cache_now && cache_now.type === InputDef_type.Dynamic) {
+                        cache_now.value.addsub(emit, { order })
+                    }
+                },
+
+                detach: () => {
+                    src.value.rmsub(src_sub)
+
+                    if (target_last && target_last.type === InputDef_type.Dynamic) {
+                        target_last.value.rmsub(emit)
+                    }
+                },
             }
         },
-        () => {
-            const oldtarget = target
-
-            target = null
-
-            src.value.rmsub(src_sub)
-            oldtarget?.rmsub(target_sub)
-        }
-    )
+    })
 
     return inputdef_new_dynamic({
-        addsub(sub, config) {
-            attachment.addsub(sub, config)
-        },
+        rmsub: attachment.rmsub,
+        addsub: attachment.addsub,
 
-        rmsub(sub) {
-            attachment.rmsub(sub)
+        id: () => {
+            const cache = cache_get()
+
+            if (cache.target?.type === InputDef_type.Dynamic) {
+                return cache.target.value.id()
+            }
+
+            return cache.src_id
         },
 
         output() {
-            const src_output = src.value.output()
+            const cache_l = cache_get()
 
-            switch (src_output?.type) {
-                case undefined:
-                    return undefined
-                case InputDef_type.Static:
-                    return src_output.value()
-                case InputDef_type.Dynamic:
-                    return src_output.value.output()
+            if (cache_l.target) {
+                switch (cache_l.target.type) {
+                    case InputDef_type.Static:
+                        return cache_l.target.value()
+                    case InputDef_type.Dynamic:
+                        return cache_l.target.value.output()
+                }
             }
+
+            return undefined
         },
     })
 }

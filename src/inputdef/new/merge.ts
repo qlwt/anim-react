@@ -39,13 +39,7 @@ export const inputdef_new_merge = function <Src extends Src_Generic>(src: Src): 
         type: InputDef_type.Dynamic,
 
         value: {
-            rmsub(sub) {
-                src_esmerged.rmsub(sub)
-            },
-
-            addsub(sub, config) {
-                src_esmerged.addsub(sub, config)
-            },
+            ...src_esmerged,
 
             output() {
                 return src_values.map(v => v()) as InputDefMerge_Output<Src>
