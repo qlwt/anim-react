@@ -36,7 +36,7 @@
     },
     "dependencies": {
         "tslib": "^2.6.3",
-        "@qyu/anim-core": "^1.0.2",
+        "@qyu/anim-core": "^1.2.0",
         "@qyu/signal-core": "^2.0.0",
         "@qyu/signal-react": "^2.0.0"
     },

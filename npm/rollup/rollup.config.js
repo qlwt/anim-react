@@ -10,6 +10,7 @@ export default defineConfig({
 
     external: [
         "react",
+        "react/jsx-runtime",
         "@qyu/anim-core",
         "@qyu/signal-core",
         "@qyu/signal-react"

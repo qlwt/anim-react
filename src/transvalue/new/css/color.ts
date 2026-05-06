@@ -9,11 +9,16 @@ export type TransValue_New_CSSColor_Config = {
     readonly tracker?: Tracker
 }
 
+type Color<Init, Path> = (
+    | number
+    | readonly [init: Init, path: Path, config?: TransValue_New_CSSColor_Config]
+)
+
 export type TransValue_New_CSSColor_Definition<Init, Path> = readonly [
-    r: readonly [init: Init, path: Path, config?: TransValue_New_CSSColor_Config] | number,
-    g: readonly [init: Init, path: Path, config?: TransValue_New_CSSColor_Config] | number,
-    b: readonly [init: Init, path: Path, config?: TransValue_New_CSSColor_Config] | number,
-    a?: readonly [init: Init, path: Path, config?: TransValue_New_CSSColor_Config] | number
+    r: Color<Init, Path>,
+    g: Color<Init, Path>,
+    b: Color<Init, Path>,
+    a?: Color<Init, Path>
 ]
 
 type Definition<Init, Path> = TransValue_New_CSSColor_Definition<Init, Path>
@@ -36,7 +41,12 @@ const bound_alpha = function(value: number | null): number | null {
     return value
 }
 
-export const transvalue_new_csscolor = function <Init, Path>(definition: Definition<Init, Path>): TransValue<TransValue_CSSTarget, Init, Path> {
+const defaults_deps: readonly unknown[] = []
+
+export const transvalue_new_csscolor = function <Init, Path>(
+    definition: Definition<Init, Path>,
+    deps: null | readonly unknown[] = defaults_deps
+): TransValue<TransValue_CSSTarget, Init, Path> {
     const transvalue: TransValue<TransValue_CSSTarget, Init, Path> = {}
     const value: [number | null, number | null, number | null, a: number | null] = [null, null, null, null]
 
@@ -48,20 +58,21 @@ export const transvalue_new_csscolor = function <Init, Path>(definition: Definit
             value[i] = def
 
             continue
-        }
+        } else {
+            transvalue[name] = {
+                deps,
+                init: def[0],
+                path: def[1],
 
-        transvalue[name] = {
-            init: def[0],
-            path: def[1],
+                effect: target => state => {
+                    value[i] = state
+                    def[2]?.tracker?.input(state)
 
-            effect: target => state => {
-                value[i] = state
-                def[2]?.tracker?.input(state)
-
-                if (value[3] === null) {
-                    target(`rgb(${bound(value[0])}, ${bound(value[1])}, ${bound(value[2])})`)
-                } else {
-                    target(`rgba(${bound(value[0])}, ${bound(value[1])}, ${bound(value[2])}, ${bound_alpha(value[3])})`)
+                    if (value[3] === null) {
+                        target(`rgb(${bound(value[0])}, ${bound(value[1])}, ${bound(value[2])})`)
+                    } else {
+                        target(`rgba(${bound(value[0])}, ${bound(value[1])}, ${bound(value[2])}, ${bound_alpha(value[3])})`)
+                    }
                 }
             }
         }

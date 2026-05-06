@@ -4,7 +4,7 @@ import type { InputDef } from "#src/inputdef/type/InputDef.js"
 import type { PathDef } from "#src/pathdef/type/PathDef.js"
 import type { TransValue } from "#src/transvalue/type/TransValue.js"
 import type { TransValue_CSSTarget } from "#src/transvalue/type/TransValue_CSSTarget.js"
-import type { AnimStyleMap_Point } from "#src/type/AnimStyleMap_Point.js"
+import type { AnimStyleMap_Point, AnimStyleMap_Point_Field } from "#src/type/AnimStyleMap_Point.js"
 import type { StyleTarget } from "#src/type/StyleTarget.js"
 import { object_new_map } from "#src/util/object/new/map.js"
 import * as ac from "@qyu/anim-core"
@@ -39,12 +39,33 @@ export const pathdef_new_stylemap = function <ChildPoint, TransPath>(
                     object_new_map(properties, (src_transvalue, property) => {
                         return ac.anim_new_mergemap(
                             object_new_map(src_transvalue, transinstance => {
-                                return config.anim_new(
+                                const anim = config.anim_new(
                                     transinstance.path,
                                     transinstance.effect(value => {
                                         ref()?.style.setProperty(property, value)
                                     })
                                 )
+
+                                return {
+                                    emit: point => {
+                                        return anim.emit(point.point)
+                                    },
+
+                                    emitdiff: (from, to) => {
+                                        return anim.emitdiff(from.point, to.point)
+                                    },
+
+                                    finished: point => {
+                                        return anim.finished(point.point)
+                                    },
+
+                                    step: (point, timeskip) => {
+                                        return {
+                                            deps: point.deps,
+                                            point: anim.step(point.point, timeskip),
+                                        }
+                                    },
+                                } satisfies ac.Anim<AnimStyleMap_Point_Field<ChildPoint>>
                             })
                         )
                     })

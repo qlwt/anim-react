@@ -4,7 +4,7 @@ import { inputdef_new_pipe } from "#src/inputdef/new/pipe.js"
 import type { InputDef } from "#src/inputdef/type/InputDef.js"
 import type { TransValue } from "#src/transvalue/type/TransValue.js"
 import type { TransValue_CSSTarget } from "#src/transvalue/type/TransValue_CSSTarget.js"
-import type { AnimStyleMap_Point } from "#src/type/AnimStyleMap_Point.js"
+import type { AnimStyleMap_Point, AnimStyleMap_Point_Field } from "#src/type/AnimStyleMap_Point.js"
 import { object_new_map } from "#src/util/object/new/map.js"
 
 export type InitDef_New_StyleMap_Properties<Init> = {
@@ -26,6 +26,32 @@ type Point<ChildPoint> = AnimStyleMap_Point<ChildPoint>
 type Properties<TransInit> = InitDef_New_StyleMap_Properties<TransInit>
 type Params<ChildPoint, TransInit> = InitDef_New_StyleMap_Params<ChildPoint, TransInit>
 
+const field_eq = function <ChildPoint>(
+    point_eq: (left: ChildPoint, right: ChildPoint) => boolean,
+    left: AnimStyleMap_Point_Field<ChildPoint>,
+    right: AnimStyleMap_Point_Field<ChildPoint>
+): boolean {
+    if (right.deps === null) {
+        return point_eq(left.point, right.point)
+    } else {
+        if (left.deps === right.deps) {
+            return true
+        }
+
+        if (left.deps === null || left.deps.length !== right.deps.length) {
+            return false
+        }
+
+        for (let i = 0; i < left.deps.length; ++i) {
+            if (left.deps[i]! !== right.deps[i]!) {
+                return false
+            }
+        }
+    }
+
+    return true
+}
+
 type Changed_Map_Params<ChildPoint, TransInit> = {
     readonly ipoint_map: Point<ChildPoint>[string]
     readonly properties_map: Properties<TransInit>[string]
@@ -41,19 +67,17 @@ const changed_new_map = function <ChildPoint, TransInit>(params: Changed_Map_Par
     if (ipoint_keys.length === Object.keys(properties_map).length) {
         for (const ipoint_key of ipoint_keys) {
             const properties_child = properties_map[ipoint_key]
-            const ipoint_child = ipoint_map[ipoint_key]!
+            const ipoint_field = ipoint_map[ipoint_key]!
 
             if (properties_child) {
-                const src_point = init.point_new(properties_child.init)
+                const field_next = { deps: properties_child.deps, point: init.point_new(properties_child.init) }
 
-                if (!init.point_eq(ipoint_child, src_point)) {
+                if (!field_eq(init.point_eq, ipoint_field, field_next)) {
                     return true
                 }
-
-                continue
+            } else {
+                return true
             }
-
-            return true
         }
 
         return false
@@ -73,7 +97,10 @@ export const initdef_new_stylemap = function <ChildPoint, Init>(params: Params<C
                 init: () => {
                     return object_new_map(properties, transvalue => {
                         return object_new_map(transvalue, transinstance => {
-                            return init.point_new(transinstance.init)
+                            return {
+                                deps: transinstance.deps,
+                                point: init.point_new(transinstance.init),
+                            }
                         })
                     })
                 },
@@ -87,7 +114,7 @@ export const initdef_new_stylemap = function <ChildPoint, Init>(params: Params<C
                             const ipoint_map = ipoint[ipoint_prop]!
                             const properties_map = properties[ipoint_prop]
 
-                            if (!properties_map || changed_new_map({ init, ipoint_map, properties_map })) {
+                            if (!properties_map || !changed_new_map({ init, ipoint_map, properties_map })) {
                                 continue
                             }
 
@@ -131,10 +158,11 @@ export const initdef_new_stylemap = function <ChildPoint, Init>(params: Params<C
                             const src_prop_keys = Object.keys(properties_map)
 
                             for (const src_prop_key of src_prop_keys) {
-                                const point = init.point_new(properties_map[src_prop_key]!.init)
+                                const property = properties_map[src_prop_key]!
+                                const point = init.point_new(property.init)
 
-                                update_ipoint[properties_key]![src_prop_key] = point
-                                update_lpoint[properties_key]![src_prop_key] = point
+                                update_ipoint[properties_key]![src_prop_key] = { point, deps: property.deps }
+                                update_lpoint[properties_key]![src_prop_key] = { point, deps: property.deps, }
                             }
 
                             continue
@@ -149,22 +177,23 @@ export const initdef_new_stylemap = function <ChildPoint, Init>(params: Params<C
 
                         // compare each member of property map and setup continuation
                         for (const properties_map_key of properties_map_keys) {
-                            const ipoint_map_point = ipoint_map[properties_map_key]
-                            const properties_map_point = init.point_new(properties_map[properties_map_key]!.init)
+                            const property = properties_map[properties_map_key]!
+                            const ipoint_map_field = ipoint_map[properties_map_key]
+                            const properties_map_point = init.point_new(property.init)
 
                             // if not present on ipoint - mark change and add definition
-                            if (!ipoint_map_point) {
+                            if (!ipoint_map_field) {
                                 change = true
 
-                                update_ipoint_map[properties_map_key] = properties_map_point
-                                update_lpoint_map[properties_map_key] = properties_map_point
+                                update_ipoint_map[properties_map_key] = { point: properties_map_point, deps: property.deps, }
+                                update_lpoint_map[properties_map_key] = { point: properties_map_point, deps: property.deps, }
 
                                 continue
                             }
 
                             // if point did not change - setup continuation without restart
-                            if (init.point_eq(properties_map_point, ipoint_map_point)) {
-                                update_ipoint_map[properties_map_key] = properties_map_point
+                            if (field_eq(init.point_eq, ipoint_map_field, { point: properties_map_point, deps: property.deps, }, )) {
+                                update_ipoint_map[properties_map_key] = { point: properties_map_point, deps: property.deps, }
                                 // bang lpoint_map under an assumption lpoint will have the same structure as ipoint
                                 update_lpoint_map[properties_map_key] = lpoint_map![properties_map_key]!
 
@@ -175,8 +204,8 @@ export const initdef_new_stylemap = function <ChildPoint, Init>(params: Params<C
                             {
                                 change = true
 
-                                update_ipoint[properties_key]![properties_map_key] = properties_map_point
-                                update_lpoint[properties_key]![properties_map_key] = properties_map_point
+                                update_ipoint[properties_key]![properties_map_key] = { point: properties_map_point, deps: property.deps, }
+                                update_lpoint[properties_key]![properties_map_key] = { point: properties_map_point, deps: property.deps, }
 
                                 continue
                             }

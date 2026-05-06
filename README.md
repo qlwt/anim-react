@@ -1,123 +1,34 @@
 # @qyu/anim-react
 
-React hooks for @qyu/anim-core to create and run declarative animations
+React hooks for `@qyu/anim-core` to manage declarative animations
 
 ## Concept
-- Create animation with useAnim* hook
-- When Initial condition change - animation restarts, When target or config changes - animation updates without restarting
-- Animations by the most part accept special type of input that is created with useInput* hooks. It allows to communicate updates to animation
-- Pass created Animation to useRunAnim* hook
 
-## Animate Styles with springs
+- Library mainly focuses on controled declarative animations
+- It also provides some kinds of uncontrolled animations for convenience purpose
 
 ```tsx
-// create scheduler for browser, for native or node, use (Date, setTimeout, clearTimeout)
-const scheduler_raf = fscheduler_new_frame(performance, requestAnimationFrame, cancelAnimationFrame)
-
-const App = () => {
-    const tracker = useMemo(() => signal_new_value(0), [])
-    // animation will incrementally update when config changes
-    const [natfreq, natfreq_set] = useState(1e-2)
-    // animation will incrementally update when target changes
-    const [width_target, width_target_set] = useState(500)
-    const ref_element = useRef<HTMLDivElement | null>(null)
-
-    // run animation with animation frames 
-    useRunAnimInterval({
-        // for fscheduler look at @qyu/anim-core
-        scheduler: scheduler_raf,
-        // will treat child animations individually as much as posiible
-        // that means when one of children changes it's initial value it will restart without affecting unrelated animations
-        // if false (by default) - runner will treat animation as monolith
-        spread: true,
-
-        src: useAnimStyleMapSpring({
-            // target element
-            ref: useRefObject(ref_element),
-
-            // default config for animations
-            config: useInputDynamicSet({
-                natfreq,
-                dampratio: 0.1,
-            }),
-
-            // useInputDynamicSet means 
-            properties: useInputDynamicSet({
-                height: transvalue_new_cssunit({ from: 0, target: 400, unit: "px" }),
-                // when widht_target updates - this animation will also update
-                // you can override default config
-                width: transvalue_new_cssunit({ from: 0, target: { target: width_target, natfreq: 1e-3 }, unit: "px" }),
-                // color animation
-                // property names are not transformed = need to preserve dashes
-                // use tracker param to track value of something
-                // no animation on green param
-                "background-color": transvalue_new_csscolor([[0, 200], 150, [0, 255, { tracker }], [0.2, 0.8]]),
-
-                transform: transvalue_new_csstransform({
-                    // no animation on this one
-                    translateX: "100px",
-
-                    // specific config for property
-                    scaleX: transvalue_new_cssnumber({
-                        from: 1,
-
-                        target: {
-                            target: 1.6,
-                            natfreq: 5e-3,
-
-                            precision: {
-                                velocity: 1e-4,
-                                displacement: 1e-5
-                            }
-                        },
-                    })
-                })
-            })
-        }),
-    })
-
-    return <>
-        <button onClick={() => { natfreq_set(natfreq_old => natfreq_old * 2) } }>
-            Increase natfreq {natfreq}
-        </button>
-
-        <button onClick={() => { width_target_set(width_target_old => width_target_old + 500) } }>
-            Increase width_target {width_target}
-        </button>
-
-        <div ref={ref_element} />
-    </>
-}
-```
-
-## Basic Linear animation
-
-Animation will continuosly update on path conditions change (for linear animation it's config), but restart on initial conditions change. This works for all types of animations
-
-```tsx
-const scheduler_raf = fscheduler_new_frame(performance, requestAnimationFrame, cancelAnimationFrame)
+import * as ar from "@qyu/anim-react"
 
 const App = () => {
     const [target, target_set] = useState(100)
     const [velocity, velocity_set] = useState(1e-1)
 
     // run animation with animation frames 
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
-
-        src: useAnimLine({
-            init: useInputConstant({
+    ar.useRunAnimInterval({
+        src: ar.useAnimLine({
+            init: ar.useInputConstant({
                 state: 0
             }),
 
-            config: useInputDynamicSet({
+            config: ar.useInputDynamicSet({
                 target,
                 velocity,
 
                 effect: state => {
                     console.log("Animation Tick: ", state)
                 }
-            })
+            }, [state])
         }),
     })
 
@@ -133,535 +44,66 @@ const App = () => {
 }
 ```
 
-## useInput* hooks
+## Animation Flow
+- Create animation with `useAnim*` hook
+- Pass it to `useRunAnim*` hook
+- When initial condition changes - it restarts, when config changes - it adapts
+- Process of continuing the animation from the current point with new config/target is called adapting
 
-Animations take special kind of input created with useInput hooks
+## Input Values
+- To track the changes in input conditions, the special kind of value is used
+- You create input with `useInput*` hook
+- It is either static or dynamic kind. Dynamic allows controlling animation outside of react, while static will always restart animation on change
+- There multiple ways of creating an InputValue:
+    - `useInputConstant` is static and never changes
+    - `useInputStatic` changes on deps change
+    - `useInputStaticLazy` changes on deps change, accepts getter instead of a value
+    - `useInputDynamic` created from signal, changes when source signal changes
+    - `useInputDynamicSet` manages the signal itself, schedules an update after react render if deps have changed
+    - `useInputDynamicSetLazy` manages the signal itself, schedules an update after react render if deps have changed, accepts getter instead of a value
 
-```tsx
-// will never update no matter what
-useInputConstant(10)
-// will update when dependencies change
-// dependencies can be ignored, then it will update when provided value changes
-// as it updates will return new value and consequentially restart the animation
-useInputStatic(10, [])
-// accepts signal as parameter, when value in signal changes sends update to dependent animations
-useInputDynamic(useSignalValue(10, [deps]))
-// the same as previous one, just merged into one
-useInputDynamicSet(10, [deps])
-```
+## Running the animations
+- Animations are ran by `useAnimRunInterval` hook
+- It accepts the source animation, and some config
+- `.spread` parameter means, that when there is multiple animations (eg. merged), when one restarts - it will try to preserve the state of others
+- It runs animations using provided `.scheduler` parameter. If no `.scheduler` provided, it will use animation-frames in browser or `setTimeout` in node
 
-## usePath* and useInit* hooks
+## Kinds of controled animations
 
-useAnim* hook creates whole animation, but useInit* and usePath* hooks can be used to only create point or path definition
-Almost all of animation variants have both useAnim, usePath and useInit variants
-
-```tsx
-// does not request whole anim definition in links, see later
-useAnimChain([
-    useAnimLine({
-        init: useInputConstant({
-            state: 0
-        }),
-
-        config: useInputDynamicSet({
-            target: 100,
-            velocity: 1e-2,
-
-            effect: state => {
-                console.log("Animation Tick: ", state)
-            }
-        })
-    }),
-
-    // only defining path
-    usePathLine(useInputDynamicSet({
-        target: 100,
-        velocity: 1e-2,
-
-        effect: state => {
-            console.log("Animation Tick: ", state)
-        }
-    }))
-] as const)
-```
-
-## Creating Animation
-
-### Line
-
-Linear animation
+- Library implements many variants of controlled animations allowing to combine them into complex sequences
+    - `useAnimLine` basic linear animation (A -> A1)
+    - `useAnimSpring` basic spring animation (A -> A1)
+    - `useAnimMerge` allows emitting multiple animation in parallel (A | B -> A1 | B1)
+    - `useAnimSequence` emits animations one-by-one, will merge finished animation on adapt (A -> A1 & B -> B1)
+    - `useAnimSequenceStrict` emits animation one-by-one, does not merge finished animations, so only emits one-at-a-time (A -> A1 & B -> B1)
+    - `useAnimChain` is similar to the `Sequence`, but all animations in a `Chain` share the same point (A -> A1 -> A2)
+    - `useAnimChainMap` is like a `Chain` but allows animating multiple threads with optional gaps (a: A, b: B -> a: A1 -> a: A2, b: B2)
+    - `useAnimLoop` loops the animation (( A -> A1 ) * n)
+    - `useAnimCluster` prevents `.spread` parameter in the runner to preserve the state. Meaning if one animation restarts - all do
+    - `useAnimPlayback` speed up or slow down the animation
+    - `useAnimPipe` allows to convert incompatible points (eg. for animating `chain(linear, spring)`)
+    - `useStyleMapSpring` animates styles to given targets, uses spring animations
+    - `useStyleMapLine` animates styles to given targets, uses linear animations
 
 ```tsx
+import * as ar from "@qyu/anim-react"
+
 const App = () => {
     const [target, target_set] = useState(100)
 
-    useRunAnimInterval({
+    ar.useRunAnimInterval({
         scheduler: scheduler_raf,
 
-        src: useAnimLine({
-            init: useInputConstant({
-                state: 0
-            }),
-
-            config: useInputDynamicSet({
-                target: target,
-                velocity: 1e-1,
-
-                effect: state => {
-                    console.log("Animation 1: ", state)
-                }
-            })
-        })
-    })
-
-    return <button onClick={ () => { target_set(target_old => target_old + 100) } }>
-        Increase target {target}
-    </button>
-}
-```
-
-### Spring
-
-Spring-like animation
-
-```tsx
-const App = () => {
-    const [target, target_set] = useState(100)
-
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
-
-        src: useAnimSpring({
-            init: useInputConstant({
-                state: 0,
-                velocity: -100,
-            }),
-
-            config: useInputDynamicSet({
-                target: target,
-                // bigger faster
-                natfreq: 1e-3,
-                // dampratio < 1 - will overshoot, >= 1 will not overshoot, dampratio <= 0 - inifinite animation
-                dampratio: 0.1,
-
-                // will forcefully finish animation when it's too slow and close to target
-                precision: {
-                    velocity: 1e-3,
-                    displacement: 1e-4,
-                },
-
-                effect: state => {
-                    console.log("Animation 1: ", state)
-                }
-            })
-        })
-    })
-
-    return <button onClick={ () => { target_set(target_old => target_old + 100) } }>
-        Increase target {target}
-    </button>
-}
-```
-
-### Playback
-
-Speed up or slow down animation
-
-```tsx
-const App = () => {
-    const [target, target_set] = useState(100)
-
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
-
-        src: useAnimPlayback({
-            config: useInputDynamicSet({
-                multiplire: 2.5
-            }),
-
-            src: useAnimSpring({
-                init: useInputConstant({
-                    state: 0,
-                    velocity: -100,
-                }),
-
-                config: useInputDynamicSet({
-                    target: target,
-                    natfreq: 1e-3,
-                    dampratio: 0.1,
-
-                    effect: state => {
-                        console.log("Animation 1: ", state)
-                    }
-                })
-            })
-        })
-    })
-
-    return <button onClick={ () => { target_set(target_old => target_old + 100) } }>
-        Increase target {target}
-    </button>
-}
-```
-
-### Sequence
-
-Emit animations in sequence, if animation completed once, when target updated it will emit in parallel
-
-```tsx
-const App = () => {
-    const [target, target_set] = useState(100)
-
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
-
-        src: useAnimSequence([
-            useAnimLine({
-                init: useInputConstant({
-                    state: 0
-                }),
-
-                config: useInputDynamicSet({
-                    target: target,
-                    velocity: 1e-1,
-
-                    effect: state => {
-                        console.log("Animation 1: ", state)
-                    }
-                })
-            }),
-
-            useAnimLine({
-                init: useInputConstant({
-                    state: 0
-                }),
-
-                config: useInputDynamicSet({
-                    target: target * 2,
-                    velocity: 1e-1,
-
-                    effect: state => {
-                        console.log("Animation 2: ", state)
-                    }
-                })
-            })
-        ] as const)
-    })
-
-    return <button onClick={ () => { target_set(target_old => target_old + 100) } }>
-        Increase target {target}
-    </button>
-}
-```
-
-### Sequence Strict
-
-Init animations in sequence, but only emit one at a time event if it has finished before
-
-```tsx
-const App = () => {
-    const [target, target_set] = useState(100)
-
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
-
-        src: useAnimSequenceStrict([
-            useAnimLine({
-                init: useInputConstant({
-                    state: 0
-                }),
-
-                config: useInputDynamicSet({
-                    target: target,
-                    velocity: 1e-1,
-
-                    effect: state => {
-                        console.log("Animation 1: ", state)
-                    }
-                })
-            }),
-
-            useAnimLine({
-                init: useInputConstant({
-                    state: 0
-                }),
-
-                config: useInputDynamicSet({
-                    target: target * 2,
-                    velocity: 1e-1,
-
-                    effect: state => {
-                        console.log("Animation 2: ", state)
-                    }
-                })
-            })
-        ] as const)
-    })
-
-    return <button onClick={ () => { target_set(target_old => target_old + 100) } }>
-        Increase target {target}
-    </button>
-}
-```
-
-### Merge
-
-Init animations in parallel
-
-```tsx
-const App = () => {
-    const [target, target_set] = useState(100)
-
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
-
-        src: useAnimMerge([
-            useAnimLine({
-                init: useInputConstant({
-                    state: 0
-                }),
-
-                config: useInputDynamicSet({
-                    target: target,
-                    velocity: 1e-1,
-
-                    effect: state => {
-                        console.log("Animation 1: ", state)
-                    }
-                })
-            }),
-
-            useAnimLine({
-                init: useInputConstant({
-                    state: 0
-                }),
-
-                config: useInputDynamicSet({
-                    target: target * 2,
-                    velocity: 1e-1,
-
-                    effect: state => {
-                        console.log("Animation 2: ", state)
-                    }
-                })
-            })
-        ] as const)
-    })
-
-    return <button onClick={ () => { target_set(target_old => target_old + 100) } }>
-        Increase target {target}
-    </button>
-}
-```
-
-### Chain
-
-Emit animations in sequence, but with shared point
-
-```tsx
-const App = () => {
-    const [target, target_set] = useState(100)
-
-    // first element should be animation definition
-    // chain links share point so no need to define init futher
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
-
-        src: useAnimChain([
-            useAnimLine({
-                init: useInputConstant({
-                    state: 0
-                }),
-
-                config: useInputDynamicSet({
-                    target: target,
-                    velocity: 1e-1,
-
-                    effect: state => {
-                        console.log("Animation 1: ", state)
-                    }
-                })
-            }),
-
-            usePathLine(useInputDynamicSet({
-                target: target * 2,
-                velocity: 1e-1,
-
-                effect: state => {
-                    console.log("Animation 2: ", state)
-                }
-            }))
-        ] as const)
-    })
-
-    return <button onClick={ () => { target_set(target_old => target_old + 100) } }>
-        Increase target {target}
-    </button>
-}
-```
-
-### ChainMap
-
-Like chain but with threads
-
-```tsx
-const App = () => {
-    const [target, target_set] = useState(100)
-
-    // First element of each thread should be animation definition
-    // Thread share point, not need to define init futher
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
-
-        src: useAnimChainMap([
-            {
-                thread_a: useAnimLine({
-                    init: useInputConstant({
+        // animates the same point in-order
+        src: ar.useAnimChain([
+            // adapt line point to the spring one
+            ar.useAnimPipe({
+                src: ar.useAnimLine({
+                    init: ar.useInputConstant({
                         state: 0
                     }),
 
-                    config: useInputDynamicSet({
-                        target: target,
-                        velocity: 1e-1,
-
-                        effect: state => {
-                            console.log("Animation 1a: ", state)
-                        }
-                    })
-                })
-            },
-
-            {
-                thread_a: usePathLine({
-                    init: useInputConstant({
-                        state: 0
-                    }),
-
-                    config: useInputDynamicSet({
-                        target: target * 2,
-                        velocity: 1e-1,
-
-                        effect: state => {
-                            console.log("Animation 2a: ", state)
-                        }
-                    })
-                }),
-
-                thread_b: useAnimLine({
-                    init: useInputConstant({
-                        state: 0
-                    }),
-
-                    config: useInputDynamicSet({
-                        target: target,
-                        velocity: 1e-1,
-
-                        effect: state => {
-                            console.log("Animation 1b: ", state)
-                        }
-                    })
-                })
-            }
-        ] as const)
-    })
-
-    return <button onClick={ () => { target_set(target_old => target_old + 100) } }>
-        Increase target {target}
-    </button>
-}
-```
-
-### Loop
-
-Repeat an animation
-
-```tsx
-const App = () => {
-    const [target, target_set] = useState(100)
-
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
-
-        src: useAnimLoop({
-            src: useAnimLine({
-                init: useInputConstant({
-                    state: 0
-                }),
-
-                config: useInputDynamicSet({
-                    target: target,
-                    velocity: 1e-1,
-
-                    effect: state => {
-                        console.log("Animation 1a: ", state)
-                    }
-                })
-            }),
-
-            init: useInputConstant({
-                // will make it first time and then repeat 3 times
-                repeat: 3
-            })
-        })
-    })
-
-    return <button onClick={ () => { target_set(target_old => target_old + 100) } }>
-        Increase target {target}
-    </button>
-}
-```
-
-### Merge Init and Path together
-
-```tsx
-    const App = () => {
-        const [target, target_set] = useState(100)
-
-        useRunAnimInterval({
-            scheduler: scheduler_raf,
-
-            src: useAnim(
-                useInitLine(useInputConstant({
-                    state: 0
-                })),
-
-                usePathLine(useInputDynamicSet({
-                    target: target,
-                    velocity: 1e-1,
-
-                    effect: state => {
-                        console.log("Animation 1a: ", state)
-                    }
-                })
-            ),
-        })
-
-        return <button onClick={ () => { target_set(target_old => target_old + 100) } }>
-            Increase target {target}
-        </button>
-    }
-```
-
-### Pipe
-
-Adapt animation for different kind of point
-
-```tsx
-const App = () => {
-    const [target, target_set] = useState(100)
-
-    // first element should be animation definition
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
-
-        src: useAnimChain([
-            useAnimPipe({
-                src: useAnimLine({
-                    init: useInputConstant({
-                        state: 0
-                    }),
-
-                    config: useInputDynamicSet({
+                    config: ar.useInputDynamicSet({
                         target: target,
                         velocity: 1e-1,
 
@@ -681,7 +123,8 @@ const App = () => {
                 }),
             }),
 
-            usePathSpring(useInputDynamicSet({
+            // see later about usePath*
+            ar.usePathSpring(ar.useInputDynamicSet({
                 natfreq: 1e-2,
                 dampratio: 0.1,
                 target: target * 2,
@@ -699,188 +142,268 @@ const App = () => {
 }
 ```
 
-### Cluster
+## Path and Init for animations
+- Every animation defines `Init` and `Path` config
+- `Init` tells how where to start, `Path` tells where (and how) to go
+- `useAnim*` hooks define both `Init` and `Path`, `useInit*` and `usePath` allows to define them separately
+- For `Chain` (and some others) animations share a `Point`, so only the first animation needs to define the `Init`, others can skip it
 
-Makes animation monolith, when one updates initial conditions - restarts the whole thing
+## Uncontrolled animations
+- Uncontrolled animations can be used through `motion` components
+- It includes `Layout` animations and simple to-target animations for styles
+
+## Layout Animation
+- When position or size of an element changes, it will be slowly animated to new position instead of instant change
+- All changes to the component position must trigger a rerender of that component
+- `transform` property is used to transition. That means layou changes instantly, only visual representation is animated
+- `Element` should never reach the size of `0` as you can not scale the 0-size
 
 ```tsx
+import * as ar from "@qyu/anim-react"
+import { motion } from "@qyu/anim-react"
+
 const App = () => {
-    const [target, target_set] = useState(100)
+    const [state, state_set] = r.useState(100)
 
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
+    return <div>
+        <button onClick={() => state_set(n => n + 6.28 * Math.random())}>
+            Move
+        </button>
+        
+        <motion.div
+            // minimal setup
+            layout
+            // with config
+            layout={{
+                kind: "track",
+                // transformOrigin of the element, center center is default
+                origin: [0.5, 0.5],
+                // providing id allows to do layou animation over different elements
+                id: "red-square",
+                // it uses spring animations, that is the default config
+                anim_translate_config: { natfreq: 1e-2, dampratio: 1, },
+                anim_scale_config: { natfreq: 1e-2, dampratio: 1, precision: { velocity: 1e-3, displacement: 1e-2 } },
+            }}
 
-        src: useAnimCluster(useAnimMerge([
-            useAnimLine({
-                init: useInputConstant({
-                    state: 0
-                }),
+            // this is just normal style property of a div, it is not animated by default
+            style={{
+                background: "red",
+                width: `${(Math.sin(state) + 2) * 100}px`,
+                height: `${(Math.cos(state) + 2) * 100}px`,
 
-                config: useInputDynamicSet({
-                    target: target,
-                    velocity: 1e-1,
+                position: "relative",
+                left: `${(Math.sin(state) + 2) * 100}px`,
+                top: `${(Math.cos(state) + 2) * 100}px`,
+            }}
+        />
+    </div>
+}
+```
 
-                    effect: state => {
-                        console.log("Animation 1: ", state)
+### Child Distortion
+
+- Sometimes children of the animated `Element` may get distorted.
+- In such cases you need to wrap them into their own `motion` component
+- `layout="normalize"` will only animate position, while keeping scale stable
+- Note, that `transform` property does not work on `inline` elements, so you need to set `display: inline-block`
+
+```tsx
+import * as ar from "@qyu/anim-react"
+import { motion } from "@qyu/anim-react"
+
+const App = () => {
+    const [state, state_set] = r.useState(100)
+
+    return <div>
+        <button onClick={() => state_set(n => n + 6.28 * Math.random())}>
+            Move
+        </button>
+        
+        <motion.div
+            layout
+
+            style={{
+                background: "red",
+                width: `${(Math.sin(state) + 2) * 150}px`,
+                height: `${(Math.cos(state) + 2) * 150}px`,
+
+                position: "relative",
+                left: `${(Math.sin(state) + 2) * 150}px`,
+                top: `${(Math.cos(state) + 2) * 150}px`,
+            }}
+        >
+            <motion.div layout>
+                Text will be distorted
+            </motion.div>
+
+            <motion.div layout>
+                <motion.span layout="normalize" style={{ display: "inline-block" }}>
+                    Text will be preserved
+                </motion.span>
+            </motion.div>
+        </motion.div>
+    </div>
+}
+```
+
+### Layout animations in scaled environments
+
+- Lets see the following example
+
+```tsx
+import * as ar from "@qyu/anim-react"
+import { motion } from "@qyu/anim-react"
+
+const App = () => {
+    const [state, state_set] = r.useState(100)
+
+    return <div>
+        <button onClick={() => state_set(n => n + 6.28 * Math.random())}>
+            Move
+        </button>
+        
+        <div style={{ width: "1000px", height: "1000px", background: "gray", transform: "scale(0.5)" }}>
+            <motion.div
+                layout
+
+                style={{
+                    background: "red",
+                    width: `${(Math.sin(state) + 2) * 150}px`,
+                    height: `${(Math.cos(state) + 2) * 150}px`,
+
+                    position: "relative",
+                    left: `${(Math.sin(state) + 2) * 150}px`,
+                    top: `${(Math.cos(state) + 2) * 150}px`,
+                }}
+            />
+        </div>
+    </div>
+}
+```
+
+- Here animated element stays inside of the element with `scale(0.5)` and it breaks the animation
+- To avoid that, use `motion` element with `layout={{ kind: "static", scale: 0.5 }}`
+- Layout animation can not be performed in a negative-scale environment
+
+```tsx
+import * as ar from "@qyu/anim-react"
+import { motion } from "@qyu/anim-react"
+
+const App = () => {
+    const [state, state_set] = r.useState(100)
+
+    return <div>
+        <button onClick={() => state_set(n => n + 6.28 * Math.random())}>
+            Move
+        </button>
+        
+        <motion.div
+            layout={{ kind: "static", scale: 0.5, }}
+            style={{ width: "1000px", height: "1000px", background: "gray", transform: "scale(0.5)" }}
+        >
+            <motion.div
+                layout
+
+                style={{
+                    background: "red",
+                    width: `${(Math.sin(state) + 2) * 150}px`,
+                    height: `${(Math.cos(state) + 2) * 150}px`,
+
+                    position: "relative",
+                    left: `${(Math.sin(state) + 2) * 150}px`,
+                    top: `${(Math.cos(state) + 2) * 150}px`,
+                }}
+            />
+        </motion.div>
+    </div>
+}
+```
+
+### Virtual Layout Animation
+
+- When you can not directly render the element as `motion` element, you can still use virtual layout tracking
+
+```tsx
+import * as ar from "@qyu/anim-react"
+import { motion } from "@qyu/anim-react"
+
+const App = () => {
+    const [state, state_set] = r.useState(100)
+
+    return <div>
+        <button onClick={() => state_set(n => n + 6.28 * Math.random())}>
+            Move
+        </button>
+
+        <motion.div
+            layout={{ kind: "static", scale: 0.5, }}
+            style={{ width: "1000px", height: "1000px", background: "gray", transform: "scale(0.5)" }}
+        >
+            {/* must be rendered above the element */}
+            <CmpMotion_LayoutVirtual layout target={() => ref_element.current}>
+                <div
+                    ref={ref_element}
+
+                    style={{
+                        background: "red",
+                        width: `${(Math.sin(state) + 2) * 150}px`,
+                        height: `${(Math.cos(state) + 2) * 150}px`,
+
+                        position: "relative",
+                        left: `${(Math.sin(state) + 2) * 150}px`,
+                        top: `${(Math.cos(state) + 2) * 150}px`,
+                    }}
+                />
+            </CmpMotion_LayoutVirtual>
+        </motion.div>
+    </div>
+}
+```
+
+## To-Target style animations
+
+- Animates styles of `motion` element to specified targets
+- Uses spring animations
+- Under the hood just runs `useAnimStyleMapSpring`, so interface is the same
+
+```tsx
+import * as ar from "@qyu/anim-react"
+import { motion } from "@qyu/anim-react"
+
+const App = () => {
+    const [state, state_set] = r.useState(100)
+
+    return <div>
+        <button onClick={() => state_set(n => n + 100)}>
+            Move
+        </button>
+
+        <motion.div 
+            // that is the default config
+            anim_style_config={{ natfreq: 1e-2, dampratio: 0.5, }}
+
+            anim_style={ar.transvalue_parse({
+                width: `${state}px`,
+                background: `rgb(${( state + 100 ) % 256}, ${(state + 200) % 256}, ${(state + 300) % 256})`,
+
+                height: ar.transvalue_new_cssunit({
+                    from: 0,
+                    unit: "px",
+                    target: state,
+                    // will restart when state goes beyound 500
+                    deps: [state > 500],
+
+                    config: {
+                        tracker: { input: state => console.log(state) }
                     }
-                })
-            }),
-
-            useAnimLine({
-                init: useInputConstant({
-                    state: 0
                 }),
-
-                config: useInputDynamicSet({
-                    target: target * 2,
-                    velocity: 1e-1,
-
-                    effect: state => {
-                        console.log("Animation 2: ", state)
-                    }
-                })
-            })
-        ] as const))
-    })
-
-    return <button onClick={ () => { target_set(target_old => target_old + 100) } }>
-        Increase target {target}
-    </button>
+            })}
+        />
+    </div>
 }
 ```
 
-### StyleMapSpring
-
-Animate ref's styles with springs
-
-```tsx
-const App = () => {
-    const [natfreq, natfreq_set] = useState(1e-2)
-    const [width_target, width_target_set] = useState(500)
-    const ref_element = useRef<HTMLDivElement | null>(null)
-
-    // run animation with animation frames 
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
-        // will treat child animations individually as much as posiible
-        // that means when one of children changes it's initial value it will restart without affecting unrelated animations
-        // if false (by default) - runner will treat animation as monolith
-        spread: true,
-
-        src: useAnimStyleMapSpring({
-            // target element
-            ref: useRefObject(ref_element),
-
-            // default config for animations
-            config: useInputDynamicSet({
-                natfreq,
-                dampratio: 0.1,
-            }),
-
-            // useInputDynamicSet means 
-            properties: useInputDynamicSet({
-                height: transvalue_new_cssunit({ from: 0, target: 400, unit: "px" }),
-                // when widht_target updates - this animation will also update
-                width: transvalue_new_cssunit({ from: 0, target: width_target, unit: "px" }),
-                // color animation
-                // property names are not transformed = need to preserve dashes
-                "background-color": transvalue_new_csscolor([[0, 200], [0, 150], [0, 255], [120, 255]]),
-
-                transform: transvalue_new_csstransform({
-                    // specific config for property
-                    scaleX: transvalue_new_cssnumber({
-                        from: 1,
-
-                        target: {
-                            target: 1.6,
-                            natfreq: 5e-3,
-
-                            precision: {
-                                velocity: 1e-4,
-                                displacement: 1e-5
-                            }
-                        },
-                    })
-                })
-            })
-        }),
-    })
-
-    return <>
-        <button onClick={() => { natfreq_set(natfreq_old => natfreq_old * 2) } }>
-            Increase natfreq {natfreq}
-        </button>
-
-        <button onClick={() => { width_target_set(width_target_old => width_target_old + 500) } }>
-            Increase width_target {width_target}
-        </button>
-
-        <div ref={ref_element} />
-    </>
-}
-```
-
-### StyleMapLine
-
-Animate styles of target with line
-
-```tsx
-const App = () => {
-    const [velocity, velocity_set] = useState(1e-2)
-    const [width_target, width_target_set] = useState(500)
-    const ref_element = useRef<HTMLDivElement | null>(null)
-
-    // run animation with animation frames 
-    useRunAnimInterval({
-        scheduler: scheduler_raf,
-        // will treat child animations individually as much as posiible
-        // that means when one of children changes it's initial value it will restart without affecting unrelated animations
-        // if false (by default) - runner will treat animation as monolith
-        spread: true,
-
-        src: useAnimStyleMapLine({
-            // target element
-            ref: useRefObject(ref_element),
-
-            // default config for animations
-            config: useInputDynamicSet({
-                velocity
-            }),
-
-            // useInputDynamicSet means 
-            properties: useInputDynamicSet({
-                height: transvalue_new_cssunit({ from: 0, target: 400, unit: "px" }),
-                // when widht_target updates - this animation will also update
-                width: transvalue_new_cssunit({ from: 0, target: width_target, unit: "px" }),
-                // color animation
-                // property names are not transformed = need to preserve dashes
-                "background-color": transvalue_new_csscolor([[0, 200], [0, 150], [0, 255], [120, 255]]),
-
-                transform: transvalue_new_csstransform({
-                    // specific config for property
-                    scaleX: transvalue_new_cssnumber({
-                        from: 1,
-
-                        target: {
-                            target: 1.6,
-                            velocity: 1e-4
-                        },
-                    })
-                })
-            })
-        }),
-    })
-
-    return <>
-        <button onClick={() => { velocity_set(velocity_old => velocity_old * 2) } }>
-            Increase velocity {velocity}
-        </button>
-
-        <button onClick={() => { width_target_set(width_target_old => width_target_old + 500) } }>
-            Increase width_target {width_target}
-        </button>
-
-        <div ref={ref_element} />
-    </>
-}
-```
+- It uses `TransValue` to determain the `Init`, `Path` and format of each property
+- You can use `transvalue_parse` to identify common properties such as units (eg. 100px) or colors
+- For colors only `rgb`, `rgba` and `hex` formats are available. You also need to put commas between arguments
+- Transforms and other complex properties are not auto-recognised, you need to provide them manually

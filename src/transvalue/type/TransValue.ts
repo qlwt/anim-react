@@ -1,6 +1,7 @@
 export type TransValue_Instance<Target = any, Init = any, Path = any> = {
     readonly init: Init
     readonly path: Path
+    readonly deps: null | readonly unknown[]
     readonly effect: (target: Target) => (state: number) => void
 }
 
