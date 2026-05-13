@@ -1,7 +1,7 @@
 {
     "name": "@qyu/anim-react",
     "type": "module",
-    "version": "1.0.5",
+    "version": "2.0.0",
     "main": "./build/bundle/entry/index.js",
     "description": "Declarative animations for react",
     "homepage": "https://github.com/qlwt/anim-react#readme",
